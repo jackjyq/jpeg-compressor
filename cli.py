@@ -97,6 +97,9 @@ def get_compress_jobs(
         jobs_list[i : i + jobs_per_worker]
         for i in range(0, len(jobs_list), jobs_per_worker)
     ]
+    # ensure that we always have num_workers jobs
+    for _ in range(num_workers-len(jobs)):
+        jobs.append([])
     logger.info(f"total jobs: {len(jobs_list)}, divided into {len(jobs)} lists")
     return jobs
 

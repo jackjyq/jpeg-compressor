@@ -3,7 +3,7 @@
 ## Quick Start
 
 ```shell
-python jpeg-compressor.py D:\uncompressed_jpeg D:\compressed_jpeg
+python cli.py D:\uncompressed_jpeg D:\compressed_jpeg
 ```
 
 - tested on Python3.10
@@ -13,11 +13,11 @@ python jpeg-compressor.py D:\uncompressed_jpeg D:\compressed_jpeg
 ## Read the docs
 
 ```shell
-python jpeg-compressor.py -h
+python cli.py -h
 ```
 
 ```shell
-usage: jpeg-compressor.py [-h] [-w [MAX_WIDTH]] [-n [NUM_WORKERS]] input_dir output_dir
+usage: cli.py [-h] [-w [MAX_WIDTH]] [-n [NUM_WORKERS]] input_dir output_dir
 
 JPEG Compressor
 compress jpg images in input_dir recursively and save to output_dir with the same directory structure.
