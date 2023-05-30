@@ -8,6 +8,7 @@ python jpeg-compressor.py D:\uncompressed_jpeg D:\compressed_jpeg
 
 - tested on Python3.10
 - tested on Windows 11
+- tested on macOS
 
 ## Read the docs
 
