@@ -1,13 +1,13 @@
 # JPEG Compressor
 
-- tested on Python3.10
-- tested on Windows 11
-
 ## Quick Start
 
 ```shell
 python jpeg-compressor.py D:\uncompressed_jpeg D:\compressed_jpeg
 ```
+
+- tested on Python3.10
+- tested on Windows 11
 
 ## Read the docs
 
