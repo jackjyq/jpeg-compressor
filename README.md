@@ -45,3 +45,5 @@ options:
                         the number of workers, default is the number of cpu cores.
 [INFO/MainProcess] process shutting down
 ```
+
+<a href="https://www.flaticon.com/free-icons/neck-pillow" title="neck pillow icons">Neck pillow icons created by nawicon - Flaticon</a>
