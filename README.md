@@ -47,3 +47,7 @@ options:
 ```
 
 <a href="https://www.flaticon.com/free-icons/neck-pillow" title="neck pillow icons">Neck pillow icons created by nawicon - Flaticon</a>
+
+https://mirrors.cloud.tencent.com/pypi/simple
+
+nuitka main.py --show-progress --onefile --plugin-enable=pyqt6 --windows-disable-console --output-dir="build" --windows-icon-from-ico=".\resources\icon.ico" -o "图片批量压缩工具.exe"

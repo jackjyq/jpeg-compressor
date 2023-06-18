@@ -66,7 +66,6 @@ class MainWindow(QWidget):
             https://doc.qt.io/qtforpython-6/
         """
         super().__init__()
-
         self.input_dir_label = QLabel("输入文件夹: ")
         self.input_dir_line_edit = self.get_dir_line_edit()
         self.input_dir_browse_btn = self.get_browse_dir_btn(self.input_dir_line_edit)
@@ -86,7 +85,7 @@ class MainWindow(QWidget):
 
         self.num_processes_label = QLabel("进程数: ")
         self.num_processes_combo_box = self.get_combo_box(["1"], 0)
-        self.start_btn = self.get_start_btn()
+        self.action_btn = self.get_action_btn()
 
         self.progress_bar = QProgressBar(self)
         self.progress_bar.setHidden(True)
@@ -95,6 +94,7 @@ class MainWindow(QWidget):
         self.status_bar = QStatusBar(self)
         self.status_bar.addWidget(self.status_label)
 
+        self.progress_bar_updater = self.get_progress_bar_updater()
         self.setup_grid_layout()
         self.setWindowIcon(QIcon("./resources/icon.png"))
         self.center_window()
@@ -121,7 +121,7 @@ class MainWindow(QWidget):
         grid.addWidget(self.copy_unhandled_files_label, 2, 2)
         grid.addWidget(self.copy_unhandled_files_check_box, 2, 3)
 
-        grid.addWidget(self.start_btn, 3, 11, 2, 1)
+        grid.addWidget(self.action_btn, 3, 11, 2, 1)
         grid.addWidget(self.image_max_width_label, 3, 0)
         grid.addWidget(self.image_max_width_combo_box, 3, 1)
 
@@ -133,10 +133,15 @@ class MainWindow(QWidget):
         grid.addWidget(self.status_bar, 6, 0, 1, 12)
         self.setLayout(grid)
 
-    def get_start_btn(self) -> QPushButton:
+    def get_progress_bar_updater(self):
+        updater = ProgressBarUpdater()
+        updater.progress.connect(self.on_progress_change)
+        return updater
+
+    def get_action_btn(self) -> QPushButton:
         """get start button with default attributes"""
         btn = QPushButton("开始转化")
-        btn.clicked.connect(self.start)
+        btn.clicked.connect(self.on_action_btn_pressed)
         # default button height 32 x 2
         btn.setFixedHeight(64)
         return btn
@@ -159,10 +164,10 @@ class MainWindow(QWidget):
             edit: QLineEdit to display the selected directory
         """
         btn = QPushButton("浏览...")
-        btn.clicked.connect(lambda: self.open_browse_dir_dialog(edit))
+        btn.clicked.connect(lambda: self.on_browse_dir_btn_pressed(edit))
         return btn
 
-    def open_browse_dir_dialog(self, edit: QLineEdit):
+    def on_browse_dir_btn_pressed(self, edit: QLineEdit):
         """open dialog to browse directory
 
         Args:
@@ -202,6 +207,7 @@ class MainWindow(QWidget):
 
     def center_window(self):
         """center window on screen
+
         Refs:
             https://zetcode.com/pyqt6/firstprograms/
         """
@@ -211,23 +217,24 @@ class MainWindow(QWidget):
         qr.moveCenter(cp)
         self.move(qr.topLeft())
 
+    def closeEvent(self, event):
+        """called when the window is closed (press the X button)"""
+        print("quiting")
+
     def on_progress_change(self, progress: int):
         self.progress_bar.setValue(progress)
 
-    def closeEvent(self, event):
-        print("quiting")
-
-    def start(self):
-        """start converting"""
-        progress_bar_updater = ProgressBarUpdater(self.progress_bar)
-        progress_bar_updater.progress.connect(self.on_progress_change)
-        progress_bar_updater.start()
+    def on_action_btn_pressed(self):
+        print(self.input_dir_line_edit.text())
+        print(self.input_dir_line_edit.text())
+        print(self.num_processes_combo_box.currentText())
+        print(self.image_max_width_combo_box.currentText())
+        self.progress_bar_updater.start()
         self.progress_bar.setHidden(False)
-        self.start_btn.setDisabled(True)
-        self.start_btn.setText("正在转换...")
+        self.action_btn.setDisabled(True)
+        self.action_btn.setText("正在转换...")
         self.status_label.setText("正在转换...")
         self.status_bar.showMessage("正在转换...")
-        self.repaint()
 
 
 def app():
@@ -235,7 +242,7 @@ def app():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     window = MainWindow()
-    window.setWindowTitle("转换工具")
+    window.setWindowTitle("图片批量压缩工具")
     window.show()
     sys.exit(app.exec())
 
