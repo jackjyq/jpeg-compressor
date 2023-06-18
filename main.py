@@ -42,7 +42,7 @@ class DirLineEdit(QLineEdit):
 
 
 class ProgressBarUpdater(QThread):
-    """A thread that updates the progress bar
+    """the thread that updates the progress bar
 
     Refs:
         https://doc.qt.io/qtforpython-6/PySide6/QtCore/QThread.html
@@ -67,11 +67,15 @@ class MainWindow(QWidget):
         """
         super().__init__()
         self.input_dir_label = QLabel("输入文件夹: ")
-        self.input_dir_line_edit = self.get_dir_line_edit()
+        self.input_dir_line_edit = self.get_dir_line_edit(
+            Path.home().joinpath("Desktop")
+        )
         self.input_dir_browse_btn = self.get_browse_dir_btn(self.input_dir_line_edit)
 
         self.output_dir_label = QLabel("输出文件夹: ")
-        self.output_dir_line_edit = self.get_dir_line_edit()
+        self.output_dir_line_edit = self.get_dir_line_edit(
+            Path.home().joinpath("Desktop")
+        )
         self.output_dir_browse_btn = self.get_browse_dir_btn(self.output_dir_line_edit)
 
         self.include_subdir_label = QLabel("包含子文件夹: ")
@@ -85,7 +89,7 @@ class MainWindow(QWidget):
 
         self.num_processes_label = QLabel("进程数: ")
         self.num_processes_combo_box = self.get_combo_box(["1"], 0)
-        self.action_btn = self.get_action_btn()
+        self.action_btn = self.get_action_btn("开始压缩")
 
         self.progress_bar = QProgressBar(self)
         self.progress_bar.setHidden(True)
@@ -96,7 +100,6 @@ class MainWindow(QWidget):
 
         self.progress_bar_updater = self.get_progress_bar_updater()
         self.setup_grid_layout()
-        self.setWindowIcon(QIcon("./resources/icon.png"))
         self.center_window()
 
     def setup_grid_layout(self):
@@ -138,17 +141,15 @@ class MainWindow(QWidget):
         updater.progress.connect(self.on_progress_change)
         return updater
 
-    def get_action_btn(self) -> QPushButton:
+    def get_action_btn(self, text: str) -> QPushButton:
         """get start button with default attributes"""
-        btn = QPushButton("开始转化")
+        btn = QPushButton(text)
         btn.clicked.connect(self.on_action_btn_pressed)
         # default button height 32 x 2
         btn.setFixedHeight(64)
         return btn
 
-    def get_dir_line_edit(
-        self, default: Path = Path.home().joinpath("Desktop")
-    ) -> DirLineEdit:
+    def get_dir_line_edit(self, default: Path) -> DirLineEdit:
         """get DirLineEdit() with default attributes"""
         line_edit = DirLineEdit()
         line_edit.setDragEnabled(True)
@@ -241,6 +242,7 @@ def app():
     """start the application"""
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
+    app.setWindowIcon(QIcon("./resources/icon.png"))
     window = MainWindow()
     window.setWindowTitle("图片批量压缩工具")
     window.show()
