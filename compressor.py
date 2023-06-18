@@ -1,63 +1,16 @@
-import logging
 import multiprocessing
 import shutil
-import time
 from multiprocessing.synchronize import Lock
 from pathlib import Path
 from queue import Empty
 
 from PIL import Image
-from tqdm import tqdm
-
-
-def get_logger(filename: str) -> logging.Logger:
-    """get logger for the subprocesses
-
-    NOTE: the function should be called in every subprocess, not in main process
-
-    """
-    logger: logging.Logger = multiprocessing.get_logger()
-    logger.setLevel(logging.INFO)
-    handler = logging.FileHandler(filename)
-    handler.setFormatter(
-        logging.Formatter(
-            f"%(asctime)s - {multiprocessing.current_process().name} - %(message)s"
-        )
-    )
-    logger.addHandler(handler)
-    return logger
-
-
-def log_with_lock(
-    *,
-    lock: Lock,
-    logger: logging.Logger,
-    message: str,
-):
-    """log with lock, to avoid mess up the log file"""
-    lock.acquire()
-    try:
-        logger.info(message)
-    finally:
-        lock.release()
 
 
 def increment_with_lock(counter):
     """increase the counter by 1 with lock"""
     with counter.get_lock():
         counter.value += 1
-
-
-def show_progress(
-    *, num_tasks: int, counter, processes: list[multiprocessing.Process]
-) -> None:
-    UPDATE_DELAY_SECONDES = 1
-    pbar = tqdm(total=num_tasks)
-    while any(p.is_alive() for p in processes):
-        pbar.update(counter.value - pbar.n)  # type: ignore
-        time.sleep(UPDATE_DELAY_SECONDES)
-    pbar.update(counter.value - pbar.n)  # type: ignore
-    pbar.close()
 
 
 def main(
@@ -85,7 +38,6 @@ def main(
         )
         processes.append(p)
         p.start()
-    show_progress(num_tasks=num_tasks, counter=progress_counter, processes=processes)
     # wait to finish
     for p in processes:
         p.join()
@@ -100,7 +52,6 @@ def compress_and_save_many(
     max_width: int,
 ):
     """loop and read tasks from queue and compress and save the images"""
-    logger = get_logger(filename="jpeg-compressor.log")
     try:
         # wait timeout to avoid blocking
         while task := tasks.get(timeout=1):
@@ -108,14 +59,10 @@ def compress_and_save_many(
                 input_file=task[0],
                 output_file=task[1],
                 max_width=max_width,
-                logger=logger,
-                lock=lock,
             )
             increment_with_lock(counter)
     except Empty:
-        log_with_lock(
-            lock=lock, logger=logger, message="Process exist due to empty queue"
-        )
+        return
 
 
 def compress_and_save_one(
@@ -123,8 +70,6 @@ def compress_and_save_one(
     input_file: Path,
     output_file: Path,
     max_width: int,
-    logger: logging.Logger,
-    lock: Lock,
 ) -> None:
     """try to compress jpeg of input_file and save to output_file
 
@@ -149,25 +94,15 @@ def compress_and_save_one(
         width, height = image.size
         if width > max_width:
             resize_ratio = max_width / width
-            width *= resize_ratio
-            height *= resize_ratio
+            width = int(width * resize_ratio)
+            height = int(height * resize_ratio)
             image = image.resize(size=(int(width), int(height)), resample=Image.LANCZOS)
             try:
                 image.save(output_file, "JPEG", optimize=True, quality=95)
-                log_with_lock(
-                    lock=lock,
-                    logger=logger,
-                    message=f"Compressed {input_file} to {output_file}",
-                )
                 return
             except OSError:
                 pass
     shutil.copy(input_file, output_file)
-    log_with_lock(
-        lock=lock,
-        logger=logger,
-        message=f"Copied {input_file} to {output_file}",
-    )
 
 
 def prepare_tasks(
