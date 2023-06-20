@@ -1,8 +1,14 @@
+import multiprocessing
+import shutil
 import sys
 import time
+from multiprocessing import Process, Queue
 from pathlib import Path
+from queue import Empty
+from typing import Callable
 
-from PyQt6.QtCore import QThread, pyqtSignal
+from PIL import Image
+from PyQt6.QtCore import QObject, QThread, pyqtSignal
 from PyQt6.QtGui import (
     QDragEnterEvent,
     QDropEvent,
@@ -21,6 +27,8 @@ from PyQt6.QtWidgets import (
     QStatusBar,
     QWidget,
 )
+
+import compressor
 
 
 class DirLineEdit(QLineEdit):
@@ -41,21 +49,48 @@ class DirLineEdit(QLineEdit):
                 break
 
 
-class ProgressBarUpdater(QThread):
-    """the thread that updates the progress bar
-
-    Refs:
-        https://doc.qt.io/qtforpython-6/PySide6/QtCore/QThread.html
-    """
-
+class StartThread(QThread):
     progress = pyqtSignal(int)
 
+    def __init__(
+        self,
+        *,
+        num_processes: int,
+        counter,
+        tasks: Queue,
+        max_width: int,
+    ) -> None:
+        super().__init__()
+        self.num_processes = num_processes
+        self.counter = counter
+        self.tasks = tasks
+        self.max_width = max_width
+
     def run(self):
-        count = 0
-        while count < 100:
-            count += 1
+        # start multi-processes
+        processes = []
+        for _ in range(self.num_processes):
+            p = multiprocessing.Process(
+                target=compressor.compress_and_save_many,
+                kwargs={
+                    "counter": self.counter,
+                    "tasks": self.tasks,
+                    "max_width": self.max_width,
+                },
+            )
+            processes.append(p)
+            p.start()
+        while self.counter.value > 0:
+            self.progress.emit(self.counter.value)
             time.sleep(0.1)
-            self.progress.emit(count)
+        # wait to finish
+        for p in processes:
+            p.join()
+
+
+class StopThread(QThread):
+    def run(self) -> None:
+        return
 
 
 class MainWindow(QWidget):
@@ -66,6 +101,10 @@ class MainWindow(QWidget):
             https://doc.qt.io/qtforpython-6/
         """
         super().__init__()
+        # used to store the tasks
+        self.tasks = multiprocessing.Queue()
+        self.counter = multiprocessing.Value("i", 0)
+
         self.input_dir_label = QLabel("输入文件夹: ")
         self.input_dir_line_edit = self.get_dir_line_edit(
             Path.home().joinpath("Desktop")
@@ -89,7 +128,9 @@ class MainWindow(QWidget):
 
         self.num_processes_label = QLabel("进程数: ")
         self.num_processes_combo_box = self.get_combo_box(["1"], 0)
-        self.action_btn = self.get_action_btn("开始压缩")
+        self.start_btn = self.get_action_btn("开始压缩", self.start)
+        self.stop_btn = self.get_action_btn("停止压缩", self.stop)
+        self.stop_btn.setHidden(True)
 
         self.progress_bar = QProgressBar(self)
         self.progress_bar.setHidden(True)
@@ -97,10 +138,7 @@ class MainWindow(QWidget):
         self.status_label = QLabel("状态栏", self)
         self.status_bar = QStatusBar(self)
         self.status_bar.addWidget(self.status_label)
-
-        self.progress_bar_updater = self.get_progress_bar_updater()
         self.setup_grid_layout()
-        self.center_window()
 
     def setup_grid_layout(self):
         """Set up the grid layout of the main window
@@ -124,7 +162,8 @@ class MainWindow(QWidget):
         grid.addWidget(self.copy_unhandled_files_label, 2, 2)
         grid.addWidget(self.copy_unhandled_files_check_box, 2, 3)
 
-        grid.addWidget(self.action_btn, 3, 11, 2, 1)
+        grid.addWidget(self.start_btn, 3, 11, 2, 1)
+        grid.addWidget(self.stop_btn, 3, 11, 2, 1)
         grid.addWidget(self.image_max_width_label, 3, 0)
         grid.addWidget(self.image_max_width_combo_box, 3, 1)
 
@@ -135,16 +174,12 @@ class MainWindow(QWidget):
 
         grid.addWidget(self.status_bar, 6, 0, 1, 12)
         self.setLayout(grid)
+        self.center_window()
 
-    def get_progress_bar_updater(self):
-        updater = ProgressBarUpdater()
-        updater.progress.connect(self.on_progress_change)
-        return updater
-
-    def get_action_btn(self, text: str) -> QPushButton:
+    def get_action_btn(self, text: str, slot: Callable) -> QPushButton:
         """get start button with default attributes"""
         btn = QPushButton(text)
-        btn.clicked.connect(self.on_action_btn_pressed)
+        btn.clicked.connect(slot)
         # default button height 32 x 2
         btn.setFixedHeight(64)
         return btn
@@ -225,17 +260,40 @@ class MainWindow(QWidget):
     def on_progress_change(self, progress: int):
         self.progress_bar.setValue(progress)
 
-    def on_action_btn_pressed(self):
-        print(self.input_dir_line_edit.text())
-        print(self.input_dir_line_edit.text())
-        print(self.num_processes_combo_box.currentText())
-        print(self.image_max_width_combo_box.currentText())
-        self.progress_bar_updater.start()
+    def start(self):
+        # windows GUI fix
+        multiprocessing.freeze_support()
+        # add tasks to the queue
+        tasks_list = compressor.get_tasks_list(
+            input_dir=Path(self.input_dir_line_edit.text()),
+            output_dir=Path(self.output_dir_line_edit.text()),
+        )
+        for task in tasks_list:
+            self.tasks.put(task)
+        # update the UI when the workers start
         self.progress_bar.setHidden(False)
-        self.action_btn.setDisabled(True)
-        self.action_btn.setText("正在转换...")
+        self.progress_bar.setMaximum(len(tasks_list))
+        self.progress_bar.reset()
+        self.start_btn.setHidden(True)
+        self.stop_btn.setHidden(False)
         self.status_label.setText("正在转换...")
-        self.status_bar.showMessage("正在转换...")
+        # start worker
+        start_thread = StartThread(
+            num_processes=int(self.num_processes_combo_box.currentText()),
+            tasks=self.tasks,
+            max_width=int(self.image_max_width_combo_box.currentText()),
+            counter=self.counter,
+        )
+        start_thread.progress.connect(self.on_progress_change)
+        # update the UI when the worker is finished
+        self.start_btn.setHidden(False)
+        self.stop_btn.setHidden(True)
+        self.status_label.setText("已完成")
+
+    def stop(self):
+        self.start_btn.setHidden(False)
+        self.stop_btn.setHidden(True)
+        self.status_label.setText("已停止")
 
 
 def app():

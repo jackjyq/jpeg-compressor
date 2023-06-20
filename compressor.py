@@ -13,40 +13,8 @@ def increment_with_lock(counter):
         counter.value += 1
 
 
-def main(
-    *, input_dir: Path, output_dir: Path, num_workers: int, max_width: int
-) -> None:
-    """start multiprocessing to compress jpg files"""
-    # macos fix
-    multiprocessing.set_start_method("fork")
-    # windows GUI fix
-    multiprocessing.freeze_support()
-    # compress and save jpeg files by multi-process
-    log_lock = multiprocessing.Lock()
-    progress_counter = multiprocessing.Value("i", 0)
-    num_tasks, tasks = prepare_tasks(input_dir=input_dir, output_dir=output_dir)
-    processes = []
-    for _ in range(num_workers):
-        p: multiprocessing.Process = multiprocessing.Process(
-            target=compress_and_save_many,
-            kwargs={
-                "lock": log_lock,
-                "counter": progress_counter,
-                "tasks": tasks,
-                "max_width": max_width,
-            },
-        )
-        processes.append(p)
-        p.start()
-    # wait to finish
-    for p in processes:
-        p.join()
-    print("All done!")
-
-
 def compress_and_save_many(
     *,
-    lock: Lock,
     counter,
     tasks: multiprocessing.Queue,
     max_width: int,
@@ -105,18 +73,15 @@ def compress_and_save_one(
     shutil.copy(input_file, output_file)
 
 
-def prepare_tasks(
-    *, input_dir: Path, output_dir: Path
-) -> tuple[int, multiprocessing.Queue]:
-    """prepare files to be compressed
+def get_tasks_list(*, input_dir: Path, output_dir: Path) -> list[tuple[Path, Path]]:
+    """get files to be compressed
 
     Args:
         input_dir (Path): input directory
         output_dir (Path): output directory
 
     Returns:
-        num_tasks (int): total number of files to be compressed
-        tasks(Queue): a queue of (input file, output file) tuples
+        tasks_list: a list of (input file, output file) tuples
     """
 
     def get_output_file(input_file: Path) -> Path:
@@ -124,21 +89,8 @@ def prepare_tasks(
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    tasks_list: list[tuple[Path, Path]] = [
+    return [
         (input_file, get_output_file(input_file))
         for input_file in input_dir.rglob("*.*")
         if not get_output_file(input_file).exists()
     ]
-    tasks: multiprocessing.Queue = multiprocessing.Queue()
-    for task in tasks_list:
-        tasks.put(task)
-    return len(tasks_list), tasks
-
-
-if __name__ == "__main__":
-    main(
-        input_dir=Path("/Volumes/SanDisk SSD/jackjyq/Documents/Takeout"),
-        output_dir=Path("/Volumes/SanDisk SSD/jackjyq/Documents/compressed"),
-        num_workers=4,
-        max_width=1920,
-    )
