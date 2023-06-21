@@ -6,12 +6,8 @@ from multiprocessing import Queue
 from pathlib import Path
 from typing import Callable
 
-from PyQt6.QtCore import QObject, QThread, pyqtSignal
-from PyQt6.QtGui import (
-    QDragEnterEvent,
-    QDropEvent,
-    QIcon,
-)
+from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent, QIcon
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -98,20 +94,17 @@ class MainWindow(QWidget):
             https://doc.qt.io/qtforpython-6/
         """
         super().__init__()
-        # initialize the multiprocessing objects
-        self.tasks = multiprocessing.Queue()
-        self.counter = multiprocessing.Value("i", 0)
 
         # create the UI elements
         self.input_dir_label = QLabel("输入文件夹: ")
         self.input_dir_line_edit = self.get_dir_line_edit(
-            Path.home().joinpath("Desktop")
+            Path.home().joinpath("Desktop", "input")
         )
         self.input_dir_browse_btn = self.get_browse_dir_btn(self.input_dir_line_edit)
 
         self.output_dir_label = QLabel("输出文件夹: ")
         self.output_dir_line_edit = self.get_dir_line_edit(
-            Path.home().joinpath("Desktop")
+            Path.home().joinpath("Desktop", "output")
         )
         self.output_dir_browse_btn = self.get_browse_dir_btn(self.output_dir_line_edit)
 
@@ -122,10 +115,14 @@ class MainWindow(QWidget):
         self.copy_unhandled_files_check_box = self.get_check_box()
 
         self.image_max_width_label = QLabel("图片最大宽度: ")
-        self.image_max_width_combo_box = self.get_combo_box(["1024", "2048"], 0)
+        self.image_max_width_combo_box = self.get_combo_box(
+            ["720", "1080", "2160", "4320"], 2
+        )
 
         self.num_processes_label = QLabel("进程数: ")
-        self.num_processes_combo_box = self.get_combo_box(["1"], 0)
+        self.num_processes_combo_box = self.get_combo_box(
+            [str(n) for n in range(1, multiprocessing.cpu_count() + 1)], 2
+        )
         self.start_btn = self.get_action_btn("开始压缩", self.on_start_btn_pressed)
         self.stop_btn = self.get_action_btn("停止压缩", self.on_stop_btn_pressed)
         self.stop_btn.setHidden(True)
@@ -238,7 +235,7 @@ class MainWindow(QWidget):
         """
         combo_box = QComboBox()
         combo_box.addItems(items)
-        combo_box.setCurrentIndex(current_index)
+        combo_box.setCurrentIndex(current_index % len(items))
         return combo_box
 
     def center_window(self):
@@ -253,10 +250,7 @@ class MainWindow(QWidget):
         qr.moveCenter(cp)
         self.move(qr.topLeft())
 
-    def closeEvent(self, event):
-        """called when the window is closed (press the X button)"""
-        print("quiting")
-
+    @pyqtSlot(int)
     def on_progress_change(self, progress: int):
         self.progress_bar.setValue(progress)
 
@@ -284,41 +278,60 @@ class MainWindow(QWidget):
             input_dir=Path(self.input_dir_line_edit.text()),
             output_dir=Path(self.output_dir_line_edit.text()),
         )
+        # initialize the multiprocessing objects
+        self.tasks = multiprocessing.Queue()
         for task in tasks_list:
             self.tasks.put(task)
 
         # start worker thread
-        self.status_label.setText("正在转换...")
+        self.status_label.setText("正在压缩...")
         self.set_btn_state(use_start_btn=False, disable=False)
         self.progress_bar.setHidden(False)
         self.progress_bar.setMaximum(len(tasks_list))
         self.progress_bar.reset()
 
-        thread = QThread()
-        worker = Worker(
+        self.counter = multiprocessing.Value("i", 0)
+        self.work_object = Worker(
             num_processes=int(self.num_processes_combo_box.currentText()),
             tasks=self.tasks,
             max_width=int(self.image_max_width_combo_box.currentText()),
             counter=self.counter,
             num_tasks=len(tasks_list),
         )
-        worker.moveToThread(thread)
-        thread.started.connect(worker.run)
-        worker.finished.connect(thread.quit)
-        worker.finished.connect(worker.deleteLater)
-        thread.finished.connect(thread.deleteLater)
-        thread.finished.connect(self.finish)
-        worker.progress.connect(self.on_progress_change)
-        thread.start()
+        self.worker_thread = QThread(self)
+        self.work_object.moveToThread(self.worker_thread)
+        self.worker_thread.started.connect(self.work_object.run)
+        self.work_object.progress.connect(self.on_progress_change)
+        self.work_object.finished.connect(self.on_worker_finished)
+        # self.work_object.finished.connect(self.work_object.deleteLater)
+        # self.worker_thread.finished.connect(self.worker_thread.deleteLater)
+        self.worker_thread.start()
 
     def on_stop_btn_pressed(self):
         self.status_label.setText("正在停止...")
         self.set_btn_state(use_start_btn=True, disable=True)
-        compressor.clear_tasks(self.tasks)
+        compressor.clear_tasks(self.tasks, self.counter)
 
-    def finish(self):
-        self.status_label.setText("已完成")
+    @pyqtSlot()
+    def on_worker_finished(self):
+        self.worker_thread.quit()
+        self.worker_thread.wait()
         self.set_btn_state(use_start_btn=True, disable=False)
+        self.progress_bar.setMaximum(1)
+        self.progress_bar.reset()
+        self.status_label.setText("已完成")
+
+    def closeEvent(self, event: QCloseEvent):
+        """override close event
+
+        Args:
+            event: close event
+        """
+        if self.worker_thread.isRunning():
+            self.on_stop_btn_pressed()
+            event.ignore()
+        else:
+            event.accept()
 
 
 def app():

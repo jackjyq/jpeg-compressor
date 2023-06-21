@@ -1,6 +1,6 @@
 import multiprocessing
 import shutil
-from multiprocessing.synchronize import Lock
+import time
 from pathlib import Path
 from queue import Empty
 
@@ -13,11 +13,11 @@ def increment_with_lock(counter):
         counter.value += 1
 
 
-def clear_tasks(tasks: multiprocessing.Queue):
+def clear_tasks(tasks: multiprocessing.Queue, counter):
     """clear tasks in queue"""
     try:
         while tasks.get(timeout=1):
-            pass
+            increment_with_lock(counter)
     except Empty:
         return
 
@@ -37,7 +37,6 @@ def compress_and_save_many(
                 output_file=task[1],
                 max_width=max_width,
             )
-            print(f"processed {task[0]} to {task[1]}")
             increment_with_lock(counter)
     except Empty:
         return
@@ -81,6 +80,7 @@ def compress_and_save_one(
             except OSError:
                 pass
     shutil.copy(input_file, output_file)
+    time.sleep(1)
 
 
 def get_tasks_list(*, input_dir: Path, output_dir: Path) -> list[tuple[Path, Path]]:
