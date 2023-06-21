@@ -1,13 +1,11 @@
+import ctypes
 import multiprocessing
-import shutil
 import sys
 import time
-from multiprocessing import Process, Queue
+from multiprocessing import Queue
 from pathlib import Path
-from queue import Empty
 from typing import Callable
 
-from PIL import Image
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 from PyQt6.QtGui import (
     QDragEnterEvent,
@@ -49,8 +47,9 @@ class DirLineEdit(QLineEdit):
                 break
 
 
-class StartThread(QThread):
+class Worker(QObject):
     progress = pyqtSignal(int)
+    finished = pyqtSignal()
 
     def __init__(
         self,
@@ -59,12 +58,14 @@ class StartThread(QThread):
         counter,
         tasks: Queue,
         max_width: int,
+        num_tasks: int,
     ) -> None:
         super().__init__()
         self.num_processes = num_processes
         self.counter = counter
         self.tasks = tasks
         self.max_width = max_width
+        self.num_tasks = num_tasks
 
     def run(self):
         # start multi-processes
@@ -80,17 +81,13 @@ class StartThread(QThread):
             )
             processes.append(p)
             p.start()
-        while self.counter.value > 0:
+        while self.counter.value < self.num_tasks:
             self.progress.emit(self.counter.value)
             time.sleep(0.1)
-        # wait to finish
         for p in processes:
             p.join()
-
-
-class StopThread(QThread):
-    def run(self) -> None:
-        return
+        self.progress.emit(self.counter.value)
+        self.finished.emit()
 
 
 class MainWindow(QWidget):
@@ -101,10 +98,11 @@ class MainWindow(QWidget):
             https://doc.qt.io/qtforpython-6/
         """
         super().__init__()
-        # used to store the tasks
+        # initialize the multiprocessing objects
         self.tasks = multiprocessing.Queue()
         self.counter = multiprocessing.Value("i", 0)
 
+        # create the UI elements
         self.input_dir_label = QLabel("输入文件夹: ")
         self.input_dir_line_edit = self.get_dir_line_edit(
             Path.home().joinpath("Desktop")
@@ -128,8 +126,8 @@ class MainWindow(QWidget):
 
         self.num_processes_label = QLabel("进程数: ")
         self.num_processes_combo_box = self.get_combo_box(["1"], 0)
-        self.start_btn = self.get_action_btn("开始压缩", self.start)
-        self.stop_btn = self.get_action_btn("停止压缩", self.stop)
+        self.start_btn = self.get_action_btn("开始压缩", self.on_start_btn_pressed)
+        self.stop_btn = self.get_action_btn("停止压缩", self.on_stop_btn_pressed)
         self.stop_btn.setHidden(True)
 
         self.progress_bar = QProgressBar(self)
@@ -138,6 +136,8 @@ class MainWindow(QWidget):
         self.status_label = QLabel("状态栏", self)
         self.status_bar = QStatusBar(self)
         self.status_bar.addWidget(self.status_label)
+
+        # set up the layout
         self.setup_grid_layout()
 
     def setup_grid_layout(self):
@@ -260,48 +260,83 @@ class MainWindow(QWidget):
     def on_progress_change(self, progress: int):
         self.progress_bar.setValue(progress)
 
-    def start(self):
-        # windows GUI fix
-        multiprocessing.freeze_support()
+    def set_btn_state(
+        self,
+        use_start_btn: bool,
+        disable: bool = False,
+    ):
+        """set the state of the start and stop button
+
+        Args:
+            use_start_btn: use start button if True, use stop button if False
+            disable: disable the button if True, enable the button if False
+        """
+        self.start_btn.setHidden(not use_start_btn)
+        self.stop_btn.setHidden(use_start_btn)
+        self.start_btn.setEnabled(not disable)
+        self.stop_btn.setEnabled(not disable)
+
+    def on_start_btn_pressed(self):
         # add tasks to the queue
+        self.status_label.setText("正在准备文件列表...")
+        self.set_btn_state(use_start_btn=False, disable=True)
         tasks_list = compressor.get_tasks_list(
             input_dir=Path(self.input_dir_line_edit.text()),
             output_dir=Path(self.output_dir_line_edit.text()),
         )
         for task in tasks_list:
             self.tasks.put(task)
-        # update the UI when the workers start
+
+        # start worker thread
+        self.status_label.setText("正在转换...")
+        self.set_btn_state(use_start_btn=False, disable=False)
         self.progress_bar.setHidden(False)
         self.progress_bar.setMaximum(len(tasks_list))
         self.progress_bar.reset()
-        self.start_btn.setHidden(True)
-        self.stop_btn.setHidden(False)
-        self.status_label.setText("正在转换...")
-        # start worker
-        start_thread = StartThread(
+
+        thread = QThread()
+        worker = Worker(
             num_processes=int(self.num_processes_combo_box.currentText()),
             tasks=self.tasks,
             max_width=int(self.image_max_width_combo_box.currentText()),
             counter=self.counter,
+            num_tasks=len(tasks_list),
         )
-        start_thread.progress.connect(self.on_progress_change)
-        # update the UI when the worker is finished
-        self.start_btn.setHidden(False)
-        self.stop_btn.setHidden(True)
-        self.status_label.setText("已完成")
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(self.finish)
+        worker.progress.connect(self.on_progress_change)
+        thread.start()
 
-    def stop(self):
-        self.start_btn.setHidden(False)
-        self.stop_btn.setHidden(True)
-        self.status_label.setText("已停止")
+    def on_stop_btn_pressed(self):
+        self.status_label.setText("正在停止...")
+        self.set_btn_state(use_start_btn=True, disable=True)
+        compressor.clear_tasks(self.tasks)
+
+    def finish(self):
+        self.status_label.setText("已完成")
+        self.set_btn_state(use_start_btn=True, disable=False)
 
 
 def app():
     """start the application"""
+    # workaround for windows taskbar icon
+    # Refs: https://stackoverflow.com/a/1552105
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("order-tools")
+    # windows GUI fix
+    multiprocessing.freeze_support()
+    # get icon file path (to be compatible with nuitka)
+    icon_file: str = str((Path(__file__).parent / "resources" / "icon.png").resolve())
+
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
-    app.setWindowIcon(QIcon("./resources/icon.png"))
+    app.setWindowIcon(QIcon(icon_file))
+
     window = MainWindow()
+    window.setWindowIcon(QIcon(icon_file))
     window.setWindowTitle("图片批量压缩工具")
     window.show()
     sys.exit(app.exec())

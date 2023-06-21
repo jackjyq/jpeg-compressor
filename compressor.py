@@ -13,6 +13,15 @@ def increment_with_lock(counter):
         counter.value += 1
 
 
+def clear_tasks(tasks: multiprocessing.Queue):
+    """clear tasks in queue"""
+    try:
+        while tasks.get(timeout=1):
+            pass
+    except Empty:
+        return
+
+
 def compress_and_save_many(
     *,
     counter,
@@ -28,6 +37,7 @@ def compress_and_save_many(
                 output_file=task[1],
                 max_width=max_width,
             )
+            print(f"processed {task[0]} to {task[1]}")
             increment_with_lock(counter)
     except Empty:
         return

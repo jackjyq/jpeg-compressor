@@ -1,8 +1,4 @@
-Nuitka==1.6.3
-ordered-set==4.1.0
 Pillow==9.5.0
 PyQt6==6.5.1
 PyQt6-Qt6==6.5.1
 PyQt6-sip==13.5.1
-types-Pillow==9.5.0.4
-zstandard==0.21.0
