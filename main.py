@@ -1,5 +1,6 @@
 import ctypes
 import multiprocessing
+import os
 import sys
 import time
 from multiprocessing import Queue
@@ -88,44 +89,43 @@ class Worker(QObject):
 
 class MainWindow(QWidget):
     def __init__(self):
-        """main window of the app
-
-        Refs:
-            https://doc.qt.io/qtforpython-6/
-        """
+        """main window of the app"""
         super().__init__()
 
-        # create the UI elements
+        # create UI elements
         self.input_dir_label = QLabel("输入文件夹: ")
-        self.input_dir_line_edit = self.get_dir_line_edit(
+        self.input_dir_line_edit = self.create_dir_line_edit(
             Path.home().joinpath("Desktop", "input")
         )
-        self.input_dir_browse_btn = self.get_browse_dir_btn(self.input_dir_line_edit)
+        self.input_dir_browse_btn = self.create_browse_dir_btn(self.input_dir_line_edit)
 
         self.output_dir_label = QLabel("输出文件夹: ")
-        self.output_dir_line_edit = self.get_dir_line_edit(
+        self.output_dir_line_edit = self.create_dir_line_edit(
             Path.home().joinpath("Desktop", "output")
         )
-        self.output_dir_browse_btn = self.get_browse_dir_btn(self.output_dir_line_edit)
+        self.output_dir_browse_btn = self.create_browse_dir_btn(
+            self.output_dir_line_edit
+        )
 
         self.include_subdir_label = QLabel("包含子文件夹: ")
-        self.include_subdir_check_box = self.get_check_box()
+        self.include_subdir_check_box = self.create_disabled_check_box()
 
         self.copy_unhandled_files_label = QLabel("复制无法处理的文件: ")
-        self.copy_unhandled_files_check_box = self.get_check_box()
+        self.copy_unhandled_files_check_box = self.create_disabled_check_box()
+
+        self.ignore_exist_files_label = QLabel("跳过已存在的文件: ")
+        self.ignore_exist_files_check_box = self.create_disabled_check_box()
 
         self.image_max_width_label = QLabel("图片最大宽度: ")
-        self.image_max_width_combo_box = self.get_combo_box(
+        self.image_max_width_combo_box = self.create_combo_box(
             ["720", "1080", "2160", "4320"], 2
         )
 
         self.num_processes_label = QLabel("进程数: ")
-        self.num_processes_combo_box = self.get_combo_box(
+        self.num_processes_combo_box = self.create_combo_box(
             [str(n) for n in range(1, multiprocessing.cpu_count() + 1)], 2
         )
-        self.start_btn = self.get_action_btn("开始压缩", self.on_start_btn_pressed)
-        self.stop_btn = self.get_action_btn("停止压缩", self.on_stop_btn_pressed)
-        self.stop_btn.setHidden(True)
+        self.action_btn = self.create_action_button()
 
         self.progress_bar = QProgressBar(self)
         self.progress_bar.setHidden(True)
@@ -153,14 +153,14 @@ class MainWindow(QWidget):
         grid.addWidget(self.output_dir_line_edit, 1, 1, 1, 10)
         grid.addWidget(self.output_dir_browse_btn, 1, 11)
 
-        grid.addWidget(self.include_subdir_label, 2, 0)
-        grid.addWidget(self.include_subdir_check_box, 2, 1)
+        grid.addWidget(self.copy_unhandled_files_label, 2, 0)
+        grid.addWidget(self.copy_unhandled_files_check_box, 2, 1)
+        grid.addWidget(self.ignore_exist_files_label, 2, 2)
+        grid.addWidget(self.ignore_exist_files_check_box, 2, 3)
+        grid.addWidget(self.include_subdir_label, 2, 4)
+        grid.addWidget(self.include_subdir_check_box, 2, 5)
 
-        grid.addWidget(self.copy_unhandled_files_label, 2, 2)
-        grid.addWidget(self.copy_unhandled_files_check_box, 2, 3)
-
-        grid.addWidget(self.start_btn, 3, 11, 2, 1)
-        grid.addWidget(self.stop_btn, 3, 11, 2, 1)
+        grid.addWidget(self.action_btn, 3, 11, 2, 1)
         grid.addWidget(self.image_max_width_label, 3, 0)
         grid.addWidget(self.image_max_width_combo_box, 3, 1)
 
@@ -173,24 +173,24 @@ class MainWindow(QWidget):
         self.setLayout(grid)
         self.center_window()
 
-    def get_action_btn(self, text: str, slot: Callable) -> QPushButton:
+    def create_action_button(self) -> QPushButton:
         """get start button with default attributes"""
-        btn = QPushButton(text)
-        btn.clicked.connect(slot)
+        btn = QPushButton("开始压缩")
+        btn.setCheckable(True)
+        btn.clicked.connect(self.on_action_btn_pressed)
         # default button height 32 x 2
         btn.setFixedHeight(64)
         return btn
 
-    def get_dir_line_edit(self, default: Path) -> DirLineEdit:
+    def create_dir_line_edit(self, default: Path) -> DirLineEdit:
         """get DirLineEdit() with default attributes"""
         line_edit = DirLineEdit()
         line_edit.setDragEnabled(True)
         line_edit.setReadOnly(True)
-        line_edit.setEnabled(False)
         line_edit.setText(str(default.resolve()))
         return line_edit
 
-    def get_browse_dir_btn(self, edit: QLineEdit) -> QPushButton:
+    def create_browse_dir_btn(self, edit: QLineEdit) -> QPushButton:
         """get button to open browse directory dialog
 
         Args:
@@ -200,21 +200,7 @@ class MainWindow(QWidget):
         btn.clicked.connect(lambda: self.on_browse_dir_btn_pressed(edit))
         return btn
 
-    def on_browse_dir_btn_pressed(self, edit: QLineEdit):
-        """open dialog to browse directory
-
-        Args:
-            edit: QLineEdit to display the selected directory
-        """
-        folder = QFileDialog.getExistingDirectory(
-            self,
-            "选择文件夹",
-            edit.text(),
-        )
-        if folder:
-            edit.setText(folder)
-
-    def get_check_box(self):
+    def create_disabled_check_box(self):
         """get check box with default attributes
 
         NOTE:
@@ -226,7 +212,7 @@ class MainWindow(QWidget):
         check_box.setEnabled(False)
         return check_box
 
-    def get_combo_box(self, items: list[str], current_index: int) -> QComboBox:
+    def create_combo_box(self, items: list[str], current_index: int) -> QComboBox:
         """get combo box with default attributes
 
         Args:
@@ -250,46 +236,60 @@ class MainWindow(QWidget):
         qr.moveCenter(cp)
         self.move(qr.topLeft())
 
+    def on_browse_dir_btn_pressed(self, edit: QLineEdit):
+        """open dialog to browse directory
+
+        Args:
+            edit: QLineEdit to display the selected directory
+        """
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "选择文件夹",
+            edit.text(),
+        )
+        if folder:
+            edit.setText(str(Path(folder).resolve()))
+
     @pyqtSlot(int)
     def on_progress_change(self, progress: int):
         self.progress_bar.setValue(progress)
 
-    def set_btn_state(
-        self,
-        use_start_btn: bool,
-        disable: bool = False,
-    ):
-        """set the state of the start and stop button
+    @pyqtSlot()
+    def on_worker_finished(self):
+        self.status_label.setText("正在停止...")
+        self.worker_thread.quit()
+        self.worker_thread.wait()
+        self.progress_bar.setMaximum(1)
+        self.progress_bar.reset()
+        self.status_label.setText("已完成")
+        self.action_btn.setText("开始压缩")
+        self.action_btn.setChecked(False)
+        self.action_btn.setEnabled(True)
 
-        Args:
-            use_start_btn: use start button if True, use stop button if False
-            disable: disable the button if True, enable the button if False
-        """
-        self.start_btn.setHidden(not use_start_btn)
-        self.stop_btn.setHidden(use_start_btn)
-        self.start_btn.setEnabled(not disable)
-        self.stop_btn.setEnabled(not disable)
+    def on_action_btn_pressed(self):
+        if self.action_btn.isChecked():
+            self.action_btn.setText("停止压缩")
+            self.start()
+        else:
+            self.action_btn.setText("开始压缩")
+            self.stop()
 
-    def on_start_btn_pressed(self):
+    def start(self):
         # add tasks to the queue
         self.status_label.setText("正在准备文件列表...")
-        self.set_btn_state(use_start_btn=False, disable=True)
+        self.action_btn.setEnabled(False)
         tasks_list = compressor.get_tasks_list(
             input_dir=Path(self.input_dir_line_edit.text()),
             output_dir=Path(self.output_dir_line_edit.text()),
         )
-        # initialize the multiprocessing objects
         self.tasks = multiprocessing.Queue()
         for task in tasks_list:
             self.tasks.put(task)
-
-        # start worker thread
-        self.status_label.setText("正在压缩...")
-        self.set_btn_state(use_start_btn=False, disable=False)
-        self.progress_bar.setHidden(False)
-        self.progress_bar.setMaximum(len(tasks_list))
+        # reset progress bar
         self.progress_bar.reset()
-
+        self.progress_bar.setMaximum(len(tasks_list))
+        self.progress_bar.setHidden(False)
+        # start worker
         self.counter = multiprocessing.Value("i", 0)
         self.work_object = Worker(
             num_processes=int(self.num_processes_combo_box.currentText()),
@@ -303,23 +303,15 @@ class MainWindow(QWidget):
         self.worker_thread.started.connect(self.work_object.run)
         self.work_object.progress.connect(self.on_progress_change)
         self.work_object.finished.connect(self.on_worker_finished)
-        # self.work_object.finished.connect(self.work_object.deleteLater)
-        # self.worker_thread.finished.connect(self.worker_thread.deleteLater)
         self.worker_thread.start()
+        self.action_btn.setEnabled(True)
+        self.status_label.setText("正在压缩...")
 
-    def on_stop_btn_pressed(self):
-        self.status_label.setText("正在停止...")
-        self.set_btn_state(use_start_btn=True, disable=True)
+    def stop(self):
+        self.status_label.setText("正在取消任务...")
+        self.action_btn.setEnabled(False)
+        self.progress_bar.setHidden(False)
         compressor.clear_tasks(self.tasks, self.counter)
-
-    @pyqtSlot()
-    def on_worker_finished(self):
-        self.worker_thread.quit()
-        self.worker_thread.wait()
-        self.set_btn_state(use_start_btn=True, disable=False)
-        self.progress_bar.setMaximum(1)
-        self.progress_bar.reset()
-        self.status_label.setText("已完成")
 
     def closeEvent(self, event: QCloseEvent):
         """override close event
@@ -327,8 +319,8 @@ class MainWindow(QWidget):
         Args:
             event: close event
         """
-        if self.worker_thread.isRunning():
-            self.on_stop_btn_pressed()
+        if hasattr(self, "worker_thread") and self.worker_thread.isRunning():
+            self.stop()
             event.ignore()
         else:
             event.accept()
@@ -338,11 +330,11 @@ def app():
     """start the application"""
     # workaround for windows taskbar icon
     # Refs: https://stackoverflow.com/a/1552105
-    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("order-tools")
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("jepg-compressor")
     # windows GUI fix
     multiprocessing.freeze_support()
     # get icon file path (to be compatible with nuitka)
-    icon_file: str = str((Path(__file__).parent / "resources" / "icon.png").resolve())
+    icon_file: str = str((Path(__file__).parent / "resources" / "icon.ico").resolve())
 
     app = QApplication(sys.argv)
     app.setStyle("Fusion")

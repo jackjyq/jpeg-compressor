@@ -1,19 +1,20 @@
 import multiprocessing
 import shutil
 import time
+from multiprocessing.sharedctypes import SynchronizedBase
 from pathlib import Path
 from queue import Empty
 
 from PIL import Image
 
 
-def increment_with_lock(counter):
+def increment_with_lock(counter: SynchronizedBase):
     """increase the counter by 1 with lock"""
     with counter.get_lock():
-        counter.value += 1
+        counter.value += 1  # type: ignore
 
 
-def clear_tasks(tasks: multiprocessing.Queue, counter):
+def clear_tasks(tasks: multiprocessing.Queue, counter: SynchronizedBase):
     """clear tasks in queue"""
     try:
         while tasks.get(timeout=1):
@@ -24,7 +25,7 @@ def clear_tasks(tasks: multiprocessing.Queue, counter):
 
 def compress_and_save_many(
     *,
-    counter,
+    counter: SynchronizedBase,
     tasks: multiprocessing.Queue,
     max_width: int,
 ):

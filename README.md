@@ -1,53 +1,35 @@
 # JPEG Compressor
 
-## Quick Start
+这是一个 JPEG 批量压缩工具，使用 Python 编写。该项目包含 GUI（图形界面），可递归压缩输入目录中的 JPEG 图像，并保存到输出目录。
 
-```shell
-python cli.py D:\uncompressed_jpeg D:\compressed_jpeg
+该程序会尽量调整图像大小而不降低其质量。若输出目录中存在相同文件，则该文件将被跳过。若输入文件无法被压缩，则该文件将被复制到输出目录中。
+
+该程序已在 Windows 11 上进行了测试。
+
+## 运行
+
+```powershell
+python3.9 -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r .\requirements.txt
+python main.py
 ```
 
-- tested on Python3.10
-- tested on Windows 11
-- tested on macOS
+## 发布
 
-## Read the docs
-
-```shell
-python cli.py -h
+```powershell
+.\venv\Scripts\Activate.ps1
+pyinstaller main.py --onefile --icon=resources\icon.ico --noconsole --add-data="resources\icon.ico;resources" --name=:"JPEG-Compressor"
 ```
 
-```shell
-usage: cli.py [-h] [-w [MAX_WIDTH]] [-n [NUM_WORKERS]] input_dir output_dir
+## 测试
 
-JPEG Compressor
-compress jpg images in input_dir recursively and save to output_dir with the same directory structure.
+- [ ] 点击开始，等待结束，点 X 关闭
+- [ ] 点击开始, 不等结束, 点 X 关闭
+- [ ] 点击开始, 不等结束, 点击停止； 点击开始, 等待结束； 点击开始，等待结束；点 X 关闭
 
-The program will try to only resize the image rather than reduce its quality.
-
-The files in output_dir will be skipped if they already exist. Thus, you can restart the program if it is interrupted.
-
-The files in input_dir will be copied to output_dir if they can not be compressed, such as:
-    - the input file is neither a jpg, jpeg, JPG nor JPEG
-    - the input file width is less than max_width
-    - the output file can not be saved as jpg (usually because it is not a valid jpg file)
-
-----------------------------------------------------------------------------------------
-
-positional arguments:
-  input_dir             the directory of the input images.
-  output_dir            the directory of the output images.
-
-options:
-  -h, --help            show this help message and exit
-  -w [MAX_WIDTH], --max-width [MAX_WIDTH]
-                        the max width of the output image. Default is 2160 (4K), which should be enough for wallpapers
-  -n [NUM_WORKERS], --num-workers [NUM_WORKERS]
-                        the number of workers, default is the number of cpu cores.
-[INFO/MainProcess] process shutting down
-```
+## 致谢
 
 <a href="https://www.flaticon.com/free-icons/neck-pillow" title="neck pillow icons">Neck pillow icons created by nawicon - Flaticon</a>
 
-https://mirrors.cloud.tencent.com/pypi/simple
-
-nuitka main.py --show-progress --onefile --plugin-enable=pyqt6 --windows-disable-console --output-dir="build" --windows-icon-from-ico=".\resources\icon.ico" -o "图片批量压缩工具.exe"
+![](./resources/icon.png)
