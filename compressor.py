@@ -28,6 +28,7 @@ def compress_and_save_many(
     counter: SynchronizedBase,
     tasks: multiprocessing.Queue,
     max_width: int,
+    override: bool = False,
 ):
     """loop and read tasks from queue and compress and save the images"""
     try:
@@ -37,6 +38,7 @@ def compress_and_save_many(
                 input_file=task[0],
                 output_file=task[1],
                 max_width=max_width,
+                override=override,
             )
             increment_with_lock(counter)
     except Empty:
@@ -48,6 +50,7 @@ def compress_and_save_one(
     input_file: Path,
     output_file: Path,
     max_width: int,
+    override: bool,
 ) -> None:
     """try to compress jpeg of input_file and save to output_file
 
@@ -60,12 +63,15 @@ def compress_and_save_one(
         input_file (Path): input file path
         output_file (Path): output file path
         max_width (int): max width of the output image
+        override (bool, optional): override the output file if it exists.
 
     Refs:
         https://pillow.readthedocs.io/en/stable/handbook/concepts.html#concept-filtershttps://pillow.readthedocs.io/en/stable/handbook/concepts.html#concept-filters
         https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html#jpeg-saving
     """
     SUFFIXES: set[str] = {".jpg", ".jpeg", ".JPG", ".JPEG"}
+    if (not override) and output_file.exists():
+        return
     output_file.parent.mkdir(parents=True, exist_ok=True)
     if input_file.suffix in SUFFIXES:
         image = Image.open(input_file)
@@ -102,5 +108,5 @@ def get_tasks_list(*, input_dir: Path, output_dir: Path) -> list[tuple[Path, Pat
     return [
         (input_file, get_output_file(input_file))
         for input_file in input_dir.rglob("*.*")
-        if not get_output_file(input_file).exists()
+        if input_file.is_file()
     ]

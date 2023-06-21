@@ -1,4 +1,3 @@
-import ctypes
 import multiprocessing
 import sys
 import time
@@ -329,7 +328,10 @@ def app():
     """start the application"""
     # workaround for windows taskbar icon
     # Refs: https://stackoverflow.com/a/1552105
-    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("jepg-compressor")
+    if sys.platform == "win32":
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("jepg-compressor")
     # windows GUI fix
     multiprocessing.freeze_support()
     # get icon file path (to be compatible with nuitka)
