@@ -19,7 +19,7 @@ python main.py
 
 ```powershell
 .\venv\Scripts\Activate.ps1
-pyinstaller main.py --onefile --icon=resources\icon.ico --noconsole --add-data="resources\icon.ico;resources" --name=:"JPEG-Compressor"
+pyinstaller main.py --onefile --icon=resources\icon.ico --noconsole --add-data="resources\icon.ico;resources" --name="JPEG-Compressor"
 ```
 
 ## 测试

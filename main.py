@@ -1,11 +1,9 @@
 import ctypes
 import multiprocessing
-import os
 import sys
 import time
 from multiprocessing import Queue
 from pathlib import Path
-from typing import Callable
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent, QIcon
@@ -91,6 +89,10 @@ class MainWindow(QWidget):
     def __init__(self):
         """main window of the app"""
         super().__init__()
+        # create multi-processes related objects
+        self.tasks = multiprocessing.Queue()
+        self.counter = multiprocessing.Value("i", 0)
+        self.worker_thread = QThread(self)
 
         # create UI elements
         self.input_dir_label = QLabel("输入文件夹: ")
@@ -282,7 +284,6 @@ class MainWindow(QWidget):
             input_dir=Path(self.input_dir_line_edit.text()),
             output_dir=Path(self.output_dir_line_edit.text()),
         )
-        self.tasks = multiprocessing.Queue()
         for task in tasks_list:
             self.tasks.put(task)
         # reset progress bar
@@ -290,19 +291,17 @@ class MainWindow(QWidget):
         self.progress_bar.setMaximum(len(tasks_list))
         self.progress_bar.setHidden(False)
         # start worker
-        self.counter = multiprocessing.Value("i", 0)
-        self.work_object = Worker(
+        self.worker_object = Worker(
             num_processes=int(self.num_processes_combo_box.currentText()),
             tasks=self.tasks,
             max_width=int(self.image_max_width_combo_box.currentText()),
             counter=self.counter,
             num_tasks=len(tasks_list),
         )
-        self.worker_thread = QThread(self)
-        self.work_object.moveToThread(self.worker_thread)
-        self.worker_thread.started.connect(self.work_object.run)
-        self.work_object.progress.connect(self.on_progress_change)
-        self.work_object.finished.connect(self.on_worker_finished)
+        self.worker_object.moveToThread(self.worker_thread)
+        self.worker_thread.started.connect(self.worker_object.run)
+        self.worker_object.progress.connect(self.on_progress_change)
+        self.worker_object.finished.connect(self.on_worker_finished)
         self.worker_thread.start()
         self.action_btn.setEnabled(True)
         self.status_label.setText("正在压缩...")

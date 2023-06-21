@@ -81,7 +81,6 @@ def compress_and_save_one(
             except OSError:
                 pass
     shutil.copy(input_file, output_file)
-    time.sleep(1)
 
 
 def get_tasks_list(*, input_dir: Path, output_dir: Path) -> list[tuple[Path, Path]]:
