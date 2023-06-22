@@ -4,11 +4,9 @@
 
 该程序会尽量调整图像大小而不降低其质量。若输出目录中存在相同文件，则该文件将被跳过。若输入文件无法被压缩，则该文件将被复制到输出目录中。
 
-该程序已在 Windows 11 上进行了测试。
-
-在 macOS 上只能运行，暂时无法打包发布。
-
 ## 运行
+
+### Windows 11
 
 ```powershell
 python3.9 -m venv venv
@@ -17,14 +15,31 @@ pip install -r .\requirements.txt
 python main.py
 ```
 
+### macOS
+
+```shell
+python3.9 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python main.py
+```
+
 ## 发布
+
+### Windows 11
 
 ```powershell
 .\venv\Scripts\Activate.ps1
 pyinstaller main.py --onefile --icon=resources\icon.ico --noconsole --add-data="resources\icon.ico;resources" --name="JPEG-Compressor"
 ```
 
-## 测试
+### macOS
+
+```shell
+pyinstaller main.py --onefile --icon=resources/icon.ico --noconsole --add-data="resources/icon.ico:resources" --name="JPEG-Compressor"
+```
+
+## 手动测试项目
 
 - [ ] 点击开始，等待结束，点 X 关闭
 - [ ] 点击开始, 不等结束, 点 X 关闭

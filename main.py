@@ -4,9 +4,9 @@ import time
 from multiprocessing import Queue
 from pathlib import Path
 
-from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent, QIcon
-from PyQt6.QtWidgets import (
+from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
+from PyQt5.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent, QIcon
+from PyQt5.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
@@ -119,12 +119,13 @@ class MainWindow(QWidget):
 
         self.image_max_width_label = QLabel("图片最大宽度: ")
         self.image_max_width_combo_box = self.create_combo_box(
-            ["720", "1080", "2160", "4320"], 2
+            ["360", "480", "720", "1080", "2160", "4320"], -2
         )
 
         self.num_processes_label = QLabel("进程数: ")
         self.num_processes_combo_box = self.create_combo_box(
-            [str(n) for n in range(1, multiprocessing.cpu_count() + 1)], 2
+            [str(n) for n in range(1, multiprocessing.cpu_count() + 1)],
+            -1,
         )
         self.action_btn = self.create_action_button()
 
@@ -299,8 +300,8 @@ class MainWindow(QWidget):
         )
         self.worker_object.moveToThread(self.worker_thread)
         self.worker_thread.started.connect(self.worker_object.run)
-        self.worker_object.progress.connect(self.on_progress_change)
-        self.worker_object.finished.connect(self.on_worker_finished)
+        self.worker_object.progress.connect(self.on_progress_change)  # type: ignore
+        self.worker_object.finished.connect(self.on_worker_finished)  # type: ignore
         self.worker_thread.start()
         self.action_btn.setEnabled(True)
         self.status_label.setText("正在压缩...")
